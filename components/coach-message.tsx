@@ -22,7 +22,7 @@ export default function CoachMessage({ message }: CoachMessageProps) {
 
       <div
         className={`max-w-xs px-4 py-2 rounded-lg ${
-          isUser ? "bg-accent text-white rounded-br-none" : "bg-muted-light text-foreground rounded-bl-none"
+          isUser ? "bg-blue-600 text-white rounded-br-none" : "bg-gray-100 text-gray-900 rounded-bl-none"
         }`}
       >
         <p className="text-sm">{message.content}</p>

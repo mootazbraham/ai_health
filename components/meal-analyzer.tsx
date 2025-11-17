@@ -1,17 +1,19 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef } from "react"
+import { useAuth } from "@/hooks/use-auth"
 
 interface MealAnalyzerProps {
-  onMealAdded: (meal: any) => void
+  onMealAdded: () => void
 }
 
 export default function MealAnalyzer({ onMealAdded }: MealAnalyzerProps) {
+  const { user, getAuthHeaders, isAuthenticated } = useAuth()
   const [mealName, setMealName] = useState("")
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -26,86 +28,99 @@ export default function MealAnalyzer({ onMealAdded }: MealAnalyzerProps) {
   }
 
   const handleAnalyze = async () => {
-  if (!mealName.trim() && !fileInputRef.current?.files?.[0]) return
+    if (!mealName.trim() && !fileInputRef.current?.files?.[0]) {
+      setError("Please provide a meal description or photo")
+      return
+    }
 
-  setIsAnalyzing(true)
+    if (!isAuthenticated || !user) {
+      setError("Please log in to analyze meals")
+      return
+    }
 
-  try {
-    const formData = new FormData()
-    formData.append("userId", "user-123")
-    formData.append("mealName", mealName)
+    setIsAnalyzing(true)
+    setError(null)
 
-    // ✅ append the actual file (not base64)
-    const file = fileInputRef.current?.files?.[0]
-    if (file) formData.append("image", file)
+    try {
+      const formData = new FormData()
+      formData.append("mealName", mealName)
 
-    const response = await fetch("/api/v1/meals/analyze", {
-      method: "POST",
-      body: formData, // ✅ no headers! browser handles Content-Type
-    })
+      const file = fileInputRef.current?.files?.[0]
+      if (file) formData.append("image", file)
 
-    const data = await response.json()
+      const response = await fetch("/api/v1/meals/analyze", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: formData,
+      })
 
-    if (data.success) {
-      const newMeal = {
-        id: Date.now().toString(),
-        name: data.meal?.analysis?.mealName || mealName,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        calories: data.meal?.analysis?.calories || Math.floor(Math.random() * 600) + 200,
-        protein: data.meal?.analysis?.protein || Math.floor(Math.random() * 40) + 10,
-        carbs: data.meal?.analysis?.carbs || Math.floor(Math.random() * 80) + 20,
-        fat: data.meal?.analysis?.fat || Math.floor(Math.random() * 30) + 5,
-        image: photoPreview || `/placeholder.svg?height=200&width=200&query=${mealName}`,
-        aiAnalysis:
-          data.meal?.coaching ||
-          `This ${mealName} is a nutritious choice. Contains a good balance of macronutrients.`,
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to analyze meal")
       }
 
-      onMealAdded(newMeal)
-      setMealName("")
-      setPhotoPreview(null)
-      if (fileInputRef.current) fileInputRef.current.value = ""
+      if (data.success) {
+        // Success - callback will refresh the meals list
+        onMealAdded()
+        setMealName("")
+        setPhotoPreview(null)
+        if (fileInputRef.current) fileInputRef.current.value = ""
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to analyze meal"
+      setError(errorMessage)
+      console.error("[MealAnalyzer] Error:", err)
+    } finally {
+      setIsAnalyzing(false)
     }
-  } catch (error) {
-    console.error("[v0] Meal analysis error:", error)
   }
 
-  setIsAnalyzing(false)
-}
-
-
   return (
-    <div className="bg-card-bg rounded-xl p-6" style={{ border: "1px solid var(--color-neutral-200)" }}>
-      <h3 className="text-lg font-bold text-foreground mb-4">Analyze Your Meal</h3>
+    <div className="card-modern p-6 animate-slide-up">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+          <span className="text-white text-lg">📸</span>
+        </div>
+        <h3 className="text-xl font-bold text-gray-900">Analyze Your Meal</h3>
+      </div>
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         {/* Photo Preview */}
         {photoPreview && (
-          <div className="relative">
+          <div className="relative rounded-2xl overflow-hidden shadow-lg animate-scale-in">
             <img
-              src={photoPreview || "/placeholder.svg"}
+              src={photoPreview}
               alt="Meal preview"
-              className="w-full h-48 object-cover rounded-lg"
+              className="w-full h-64 object-cover"
             />
             <button
               onClick={() => setPhotoPreview(null)}
-              className="absolute top-2 right-2 bg-red-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-red-600 transition-colors"
+              className="absolute top-3 right-3 bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-red-600 transition-all shadow-lg transform hover:scale-105"
             >
               Remove
             </button>
           </div>
         )}
 
-        {/* Upload or Input */}
+        {/* Upload Area */}
         <div
-          className="rounded-lg p-8 text-center"
-          style={{
-            border: "2px dashed var(--color-neutral-300)",
-            backgroundColor: "var(--color-neutral-50)",
-          }}
+          className={`relative rounded-2xl p-12 text-center border-2 border-dashed transition-all duration-300 ${
+            photoPreview
+              ? "bg-gray-50 border-gray-300"
+              : "bg-gradient-to-br from-blue-50 to-purple-50 border-blue-300 hover:border-blue-400 hover:bg-gradient-to-br hover:from-blue-100 hover:to-purple-100"
+          }`}
         >
-          <p className="text-lg font-medium text-foreground mb-2">📸 Upload Meal Photo</p>
-          <p className="text-sm text-muted mb-4">or describe your meal below</p>
+          {!photoPreview ? (
+            <>
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                <span className="text-3xl">📷</span>
+              </div>
+              <p className="text-lg font-bold text-gray-700 mb-2">Upload Meal Photo</p>
+              <p className="text-sm text-gray-500 mb-6">or describe your meal below</p>
+            </>
+          ) : null}
+
           <input
             ref={fileInputRef}
             type="file"
@@ -116,46 +131,54 @@ export default function MealAnalyzer({ onMealAdded }: MealAnalyzerProps) {
           />
           <label
             htmlFor="meal-upload"
-            className="inline-block px-4 py-2 rounded-lg cursor-pointer transition-all duration-200"
-            style={{
-              backgroundColor: "var(--color-accent-teal)",
-              color: "white",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.9")}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+            className="inline-block px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl font-semibold cursor-pointer shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 btn-hover-lift"
           >
-            Choose Image
+            {photoPreview ? "Change Image" : "Choose Image"}
           </label>
         </div>
 
         {/* Meal Description */}
         <div>
-          <label className="block text-sm font-medium text-foreground mb-2">Meal Description</label>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            Meal Description <span className="text-gray-400">(Optional)</span>
+          </label>
           <input
             type="text"
             value={mealName}
             onChange={(e) => setMealName(e.target.value)}
             placeholder="e.g., Grilled salmon with broccoli and rice"
-            className="w-full px-4 py-2 rounded-lg focus:outline-none focus:ring-2"
-            style={{
-              border: "1px solid var(--color-neutral-200)",
-              focusRing: "2px solid var(--color-primary)",
-            }}
+            className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all duration-200"
           />
         </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            {error}
+          </div>
+        )}
 
         {/* Analyze Button */}
         <button
           onClick={handleAnalyze}
-          disabled={(!mealName.trim() && !photoPreview) || isAnalyzing}
-          className="w-full text-white py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-          style={{
-            backgroundColor: isAnalyzing ? "var(--color-neutral-400)" : "var(--color-primary)",
-          }}
-          onMouseEnter={(e) => !isAnalyzing && (e.currentTarget.style.opacity = "0.9")}
-          onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+          disabled={(!mealName.trim() && !photoPreview) || isAnalyzing || !isAuthenticated}
+          className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition-all duration-300 ${
+            isAnalyzing || !isAuthenticated
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 text-white hover:shadow-2xl transform hover:scale-[1.02] active:scale-[0.98] btn-hover-lift"
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
         >
-          {isAnalyzing ? "Analyzing with AI..." : "Analyze Meal"}
+          {isAnalyzing ? (
+            <span className="flex items-center justify-center gap-3">
+              <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Analyzing with AI...
+            </span>
+          ) : (
+            <span className="flex items-center justify-center gap-2">
+              <span className="text-xl">✨</span>
+              Analyze Meal
+            </span>
+          )}
         </button>
       </div>
     </div>

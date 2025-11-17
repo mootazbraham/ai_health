@@ -1,0 +1,261 @@
+// Prisma Schema for Vitalis Health App
+// Database: MySQL (XAMPP)
+
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  name      String?
+  email     String    @unique
+  password  String
+  // Profile fields
+  age       Int?
+  heightCm  Float?    // centimeters
+  weightKg  Float?
+  gender    String?   // male, female, other
+  photoUrl  String?
+  locale    String?   @default("en") // en, fr, ar
+  // Goals
+  goalWeight Float?
+  goalCalories Int?
+  activityLevel String? @default("moderate")
+  // Google Fitness tokens
+  googleAccessToken  String?
+  googleRefreshToken String?
+  // Strava tokens
+  stravaAccessToken  String?
+  stravaRefreshToken String?
+  // User settings as JSON
+  settings String?
+
+  meals     Meal[]
+  metrics   Metric[]
+  healthMetrics HealthMetric[]
+  conversations Conversation[]
+  messages  Message[]
+  trainingPlans TrainingPlan[]
+  workoutSessions WorkoutSession[]
+  mealRecommendations MealRecommendation[]
+  weeklyLoads WeeklyLoad[]
+  userAchievements UserAchievement[]
+  bodyCompositions BodyComposition[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Meal {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  imageUrl    String?
+  calories    Int?
+  protein     Float?
+  carbs       Float?
+  fat         Float?
+  fiber       Float?
+  mealName    String?
+  aiAnalysis  String?  @db.Text
+  classification String?
+  assessment  String?   @db.Text
+  recommendation String? @db.Text
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Metric {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  type      String   // steps, calories, sleep, heart_rate, water, etc.
+  value     Float
+  unit      String   @default("unknown")
+  createdAt DateTime @default(now())
+  recordedAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, type])
+  @@index([recordedAt])
+}
+
+model HealthMetric {
+  id     Int    @id @default(autoincrement())
+  userId Int
+  type   String // steps, heart_rate, calories, etc.
+  value  Float
+  unit   String
+  date   String // YYYY-MM-DD format
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, date], name: "userId_type_date")
+  @@index([userId])
+}
+
+// ChatGPT-like conversation threads
+model Conversation {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  title       String     @default("New chat")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages    Message[]
+
+  @@index([userId])
+}
+
+// Messages inside a conversation
+model Message {
+  id              Int       @id @default(autoincrement())
+  conversationId  Int
+  userId          Int       // owner, for auth/ownership verification
+  role            String    // 'user' | 'coach'
+  content         String    @db.Text
+  createdAt       DateTime  @default(now())
+
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([userId])
+}
+
+// Training Plans
+model TrainingPlan {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  name        String
+  description String?  @db.Text
+  goal        String   // weight_loss, muscle_gain, endurance, etc.
+  duration    Int      // weeks
+  difficulty  String   // beginner, intermediate, advanced
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workoutSessions WorkoutSession[]
+  
+  @@index([userId])
+}
+
+// Workout Sessions
+model WorkoutSession {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  planId        Int?
+  name          String
+  type          String   // cardio, strength, flexibility, etc.
+  duration      Int      // minutes
+  calories      Int?
+  completed     Boolean  @default(false)
+  scheduledDate DateTime
+  completedAt   DateTime?
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now())
+  
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan TrainingPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  
+  @@index([userId])
+  @@index([planId])
+  @@index([scheduledDate])
+}
+
+// Meal Recommendations
+model MealRecommendation {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  mealType    String   // breakfast, lunch, dinner, snack
+  name        String
+  description String?  @db.Text
+  calories    Int
+  protein     Float
+  carbs       Float
+  fat         Float
+  ingredients String   @db.Text
+  instructions String? @db.Text
+  selected    Boolean  @default(false)
+  date        String   // YYYY-MM-DD
+  createdAt   DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([date])
+}
+
+// Weekly Load Analytics
+model WeeklyLoad {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  weekStart    DateTime // Monday of the week
+  totalDistance Float   // km
+  totalTime    Int      // minutes
+  totalCalories Int
+  avgPace      Float?   // min/km
+  loadScore    Float    // calculated load score
+  riskLevel    String   // low, moderate, high
+  createdAt    DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, weekStart])
+  @@index([userId])
+}
+
+// Achievements
+model Achievement {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String
+  icon        String
+  category    String   // fitness, nutrition, streak, etc.
+  requirement String   // JSON describing requirement
+  points      Int      @default(0)
+  createdAt   DateTime @default(now())
+  
+  userAchievements UserAchievement[]
+}
+
+// User Achievements
+model UserAchievement {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  achievementId Int
+  unlockedAt    DateTime @default(now())
+  
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, achievementId])
+  @@index([userId])
+}
+
+// Body Composition Tracking
+model BodyComposition {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  weight       Float?
+  bodyFat      Float?   // percentage
+  muscleMass   Float?   // kg
+  photoUrl     String?
+  notes        String?  @db.Text
+  recordedAt   DateTime @default(now())
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([recordedAt])
+}
+
+

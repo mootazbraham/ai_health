@@ -1,0 +1,43 @@
+api:
+  dashboard: true
+  insecure: true
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    exposedByDefault: false
+    network: vitalis-network
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+
+# Enable metrics for monitoring
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addServicesLabels: true
+
+# Access logs
+accessLog: {}
+
+# Enable compression
+compression: {}
+
+# Rate limiting
+http:
+  middlewares:
+    rate-limit:
+      rateLimit:
+        burst: 100
+        average: 50
+
+# TLS Configuration
+tls:
+  certificates:
+    - certFile: /certs/localhost.pem
+      keyFile: /certs/localhost-key.pem

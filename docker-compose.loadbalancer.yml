@@ -1,0 +1,140 @@
+version: '3.8'
+
+services:
+  # Traefik Load Balancer
+  traefik:
+    image: traefik:v3.0
+    container_name: vitalis-lb
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+    networks:
+      - vitalis-network
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: vitalis-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: vitalis123
+      MYSQL_DATABASE: health_app
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - vitalis-network
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: vitalis-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - vitalis-network
+
+  # App Instance 1
+  app1:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: vitalis-app1
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=mysql://root:vitalis123@mysql:3306/health_app
+      - MINIO_ENDPOINT=http://minio:9000
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vitalis.rule=Host(`localhost`)"
+      - "traefik.http.routers.vitalis.entrypoints=web"
+      - "traefik.http.services.vitalis.loadbalancer.server.port=3000"
+      - "traefik.http.services.vitalis.loadbalancer.healthcheck.path=/api/health"
+    depends_on:
+      - mysql
+      - minio
+    networks:
+      - vitalis-network
+
+  # App Instance 2
+  app2:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: vitalis-app2
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=mysql://root:vitalis123@mysql:3306/health_app
+      - MINIO_ENDPOINT=http://minio:9000
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vitalis.rule=Host(`localhost`)"
+      - "traefik.http.routers.vitalis.entrypoints=web"
+      - "traefik.http.services.vitalis.loadbalancer.server.port=3000"
+      - "traefik.http.services.vitalis.loadbalancer.healthcheck.path=/api/health"
+    depends_on:
+      - mysql
+      - minio
+    networks:
+      - vitalis-network
+
+  # App Instance 3
+  app3:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: vitalis-app3
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=mysql://root:vitalis123@mysql:3306/health_app
+      - MINIO_ENDPOINT=http://minio:9000
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vitalis.rule=Host(`localhost`)"
+      - "traefik.http.routers.vitalis.entrypoints=web"
+      - "traefik.http.services.vitalis.loadbalancer.server.port=3000"
+      - "traefik.http.services.vitalis.loadbalancer.healthcheck.path=/api/health"
+    depends_on:
+      - mysql
+      - minio
+    networks:
+      - vitalis-network
+
+volumes:
+  mysql_data:
+  minio_data:
+
+networks:
+  vitalis-network:
+    driver: bridge

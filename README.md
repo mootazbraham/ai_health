@@ -270,9 +270,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🎖️ IEEE CSTAM2.0 Submission
 
-**Team**: [Your Team Name]  
+**Team**: Healaura 
 **Category**: Cloud Computing & GenAI Health Innovation  
-**Submission Date**: [Date]  
+
 
 ### **Deliverables**
 - ✅ Cloud-integrated prototype
